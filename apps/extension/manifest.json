@@ -3,8 +3,13 @@
   "name": "KeyNotes — YouTube Takeaways",
   "version": "1.0.0",
   "description": "Paste a YouTube link and get five transcript-grounded key takeaways.",
-  "permissions": ["activeTab", "storage"],
+  "permissions": ["activeTab", "storage", "system.display"],
+  "host_permissions": [
+    "http://localhost:3001/*",
+    "http://127.0.0.1:3001/*"
+  ],
   "action": {
+    "default_title": "Open KeyNotes",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

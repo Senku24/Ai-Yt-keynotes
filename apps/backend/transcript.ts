@@ -13,9 +13,12 @@ const youtubeHosts = new Set([
 ]);
 
 export function getYoutubeVideoId(input: string) {
-    let url : URL;
-
-    url = new URL(input);
+    let url: URL;
+    try {
+        url = new URL(input);
+    } catch {
+        return null;
+    }
     if(!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.port) {
         return null;
         

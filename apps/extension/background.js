@@ -1,171 +1,329 @@
 /**
  * KeyNotes — Chrome Extension Background Service Worker
  *
- * When the user clicks the toolbar icon, this script:
- * 1. Gets the work area of the display containing the active window.
- * 2. Resizes the current browser window to 75% left.
- * 3. Opens or reuses a KeyNotes popup window on the right 25%.
- * 4. If the active tab is a YouTube video, auto-pastes its URL.
+ * Clicking the toolbar icon:
+ * 1. Resolves the work area for the display containing the active browser window
+ *    via chrome.system.display.getInfo().
+ * 2. Normalizes fullscreen / maximized / minimized windows before resizing.
+ * 3. Splits the display work area: 75% left for the browser window, 25% right
+ *    for the KeyNotes popup window.
+ * 4. Reuses an existing KeyNotes popup window (found via chrome.windows.getAll so
+ *    idle service-worker restarts never create duplicates) and preserves its state.
+ * 5. Checks actual window bounds afterward; if Chrome or the OS cannot fit the
+ *    split, restores the browser window's original bounds and keeps the notes
+ *    window usable at a supported size.
  */
 
 const NOTES_WINDOW_KEY = "keynotes_window_id";
-const MIN_WIDTH = 360;
-const MIN_HEIGHT = 400;
+const POPUP_PATH = "popup.html";
+const MIN_USABLE_WIDTH = 380;
+const MIN_USABLE_HEIGHT = 540;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function rectOverlapArea(a, b) {
+  const x1 = Math.max(a.left, b.left);
+  const y1 = Math.max(a.top, b.top);
+  const x2 = Math.min(a.left + a.width, b.left + b.width);
+  const y2 = Math.min(a.top + a.height, b.top + b.height);
+  if (x2 <= x1 || y2 <= y1) return 0;
+  return (x2 - x1) * (y2 - y1);
+}
 
 /**
- * Get the work area bounds for the display containing the given window.
- * Falls back to full display if the Display API is not available.
+ * Find the display workArea containing the given window.
  */
-async function getWorkArea(win) {
-  // chrome.system.display is not available without "system.display" permission,
-  // so we estimate from the window's current state.
-  // For best results the popup is sized relative to the current window.
-  const width = win.width || screen.availWidth;
-  const height = win.height || screen.availHeight;
-  const left = win.left || 0;
-  const top = win.top || 0;
+async function getDisplayWorkArea(win) {
+  if (chrome.system?.display?.getInfo) {
+    try {
+      const displays = await chrome.system.display.getInfo();
+      if (displays.length > 0) {
+        const winRect = {
+          left: win.left ?? 0,
+          top: win.top ?? 0,
+          width: win.width ?? 1280,
+          height: win.height ?? 800,
+        };
+        const centerX = winRect.left + winRect.width / 2;
+        const centerY = winRect.top + winRect.height / 2;
 
-  // If window is fullscreen/maximized, use screen dimensions
-  if (win.state === "fullscreen" || win.state === "maximized") {
-    return {
-      left: 0,
-      top: 0,
-      width: screen.availWidth || 1440,
-      height: screen.availHeight || 900,
-    };
+        let best = null;
+        let bestOverlap = -1;
+
+        for (const display of displays) {
+          const area = display.bounds;
+          const overlap = rectOverlapArea(winRect, area);
+          if (overlap > bestOverlap) {
+            bestOverlap = overlap;
+            best = display;
+          }
+        }
+
+        if (!best || bestOverlap <= 0) {
+          best =
+            displays.find(
+              (d) =>
+                centerX >= d.bounds.left &&
+                centerX <= d.bounds.left + d.bounds.width &&
+                centerY >= d.bounds.top &&
+                centerY <= d.bounds.top + d.bounds.height,
+            ) ||
+            displays.find((d) => d.isPrimary) ||
+            displays[0];
+        }
+
+        const wa = best.workArea || best.bounds;
+        return {
+          left: Math.round(wa.left),
+          top: Math.round(wa.top),
+          width: Math.round(wa.width),
+          height: Math.round(wa.height),
+        };
+      }
+    } catch (err) {
+      console.warn("[KeyNotes] Display API unavailable, using window bounds:", err);
+    }
   }
 
-  // Estimate the work area as the screen containing this window
   return {
-    left: 0,
-    top: 0,
-    width: Math.max(screen.availWidth || 1440, left + width),
-    height: Math.max(screen.availHeight || 900, top + height),
+    left: Math.round(win.left ?? 0),
+    top: Math.round(win.top ?? 0),
+    width: Math.round(win.width ?? 1280),
+    height: Math.round(win.height ?? 800),
   };
 }
 
 /**
- * Detect if a URL is a YouTube video and extract its URL.
+ * Wait until a window reports state === "normal" after leaving fullscreen/maximized.
  */
-function getYouTubeUrl(url) {
-  if (!url) return null;
+async function normalizeWindow(win) {
+  if (!win || win.state === "normal") return win;
+
+  const wasFullscreen = win.state === "fullscreen";
+  await chrome.windows.update(win.id, { state: "normal" });
+
+  const timeoutMs = wasFullscreen ? 1800 : 600;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await sleep(75);
+    const updated = await chrome.windows.get(win.id);
+    if (updated.state === "normal") {
+      // Allow macOS Space transition to settle after exiting native fullscreen
+      if (wasFullscreen) await sleep(220);
+      return await chrome.windows.get(win.id);
+    }
+  }
+
+  return await chrome.windows.get(win.id);
+}
+
+/**
+ * Find an existing KeyNotes popup window via the Windows API first so idle
+ * service-worker restarts cannot create duplicate windows.
+ */
+async function findExistingNotesWindow(popupUrl) {
   try {
-    const u = new URL(url);
-    if (
-      u.hostname === "youtu.be" ||
-      u.hostname === "www.youtube.com" ||
-      u.hostname === "youtube.com" ||
-      u.hostname === "m.youtube.com"
-    ) {
-      return url;
+    const popups = await chrome.windows.getAll({
+      populate: true,
+      windowTypes: ["popup"],
+    });
+    const match = popups.find((w) =>
+      w.tabs?.some((t) => t.url && t.url.startsWith(popupUrl)),
+    );
+    if (match) return match;
+  } catch {
+    // ignore and check session storage fallback
+  }
+
+  try {
+    const stored = await chrome.storage.session.get(NOTES_WINDOW_KEY);
+    const id = stored[NOTES_WINDOW_KEY];
+    if (typeof id === "number") {
+      return await chrome.windows.get(id);
     }
   } catch {
-    // ignore
+    // stored window no longer exists
   }
+
   return null;
 }
 
-chrome.action.onClicked.addListener(async (tab) => {
+async function restoreBrowserWindow(winId, originalState, originalBounds) {
   try {
-    const currentWindow = await chrome.windows.getCurrent();
-
-    // Normalize fullscreen/maximized windows before repositioning
-    if (
-      currentWindow.state === "fullscreen" ||
-      currentWindow.state === "maximized"
+    if (originalState === "fullscreen" || originalState === "maximized") {
+      await chrome.windows.update(winId, { state: originalState });
+    } else if (
+      typeof originalBounds.left === "number" &&
+      typeof originalBounds.top === "number" &&
+      typeof originalBounds.width === "number" &&
+      typeof originalBounds.height === "number"
     ) {
-      await chrome.windows.update(currentWindow.id, { state: "normal" });
-      // Small delay for the state change to take effect
-      await new Promise((r) => setTimeout(r, 150));
+      await chrome.windows.update(winId, {
+        left: originalBounds.left,
+        top: originalBounds.top,
+        width: originalBounds.width,
+        height: originalBounds.height,
+      });
+    }
+  } catch (err) {
+    console.warn("[KeyNotes] Could not restore browser bounds:", err);
+  }
+}
+
+chrome.action.onClicked.addListener(async (tab) => {
+  const popupUrl = chrome.runtime.getURL(POPUP_PATH);
+  let browserWin = null;
+  let originalState = "normal";
+  let originalBounds = null;
+  let workArea = null;
+  let notesWin = null;
+
+  try {
+    if (typeof tab?.windowId === "number") {
+      browserWin = await chrome.windows.get(tab.windowId);
+    } else {
+      browserWin = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
     }
 
-    const workArea = await getWorkArea(currentWindow);
-    const splitLeft = workArea.left;
-    const splitWidth = Math.round(workArea.width * 0.75);
-    const notesLeft = splitLeft + splitWidth;
-    const notesWidth = Math.max(workArea.width - splitWidth, MIN_WIDTH);
-    const notesHeight = Math.max(workArea.height, MIN_HEIGHT);
+    if (browserWin.type !== "normal") {
+      browserWin = await chrome.windows.getLastFocused({ windowTypes: ["normal"] });
+    }
 
-    // Resize main browser window to 75% left
-    await chrome.windows.update(currentWindow.id, {
-      left: splitLeft,
+    originalState = browserWin.state || "normal";
+    originalBounds = {
+      left: browserWin.left,
+      top: browserWin.top,
+      width: browserWin.width,
+      height: browserWin.height,
+    };
+
+    // Resolve work area before or right around normalizing
+    workArea = await getDisplayWorkArea(browserWin);
+
+    // Normalize fullscreen / maximized / minimized before setting bounds
+    if (originalState !== "normal") {
+      browserWin = await normalizeWindow(browserWin);
+      workArea = await getDisplayWorkArea(browserWin);
+    }
+
+    const browserWidth = Math.floor(workArea.width * 0.75);
+    const notesWidth = workArea.width - browserWidth;
+
+    const browserRect = {
+      left: workArea.left,
       top: workArea.top,
-      width: splitWidth,
+      width: browserWidth,
       height: workArea.height,
-    });
+    };
 
-    // Build the popup URL with an optional YouTube link
-    const youtubeUrl = getYouTubeUrl(tab?.url);
-    let popupUrl = chrome.runtime.getURL("popup.html");
-    if (youtubeUrl) {
-      popupUrl += `?url=${encodeURIComponent(youtubeUrl)}`;
-    }
-
-    // Try to reuse an existing KeyNotes window
-    const stored = await chrome.storage.session.get(NOTES_WINDOW_KEY);
-    const existingId = stored[NOTES_WINDOW_KEY];
-
-    if (existingId) {
-      try {
-        const existingWin = await chrome.windows.get(existingId);
-        if (existingWin) {
-          // Reposition and focus
-          await chrome.windows.update(existingId, {
-            left: notesLeft,
-            top: workArea.top,
-            width: notesWidth,
-            height: notesHeight,
-            focused: true,
-          });
-
-          // If we have a YouTube URL, send it to the popup
-          if (youtubeUrl) {
-            const tabs = await chrome.tabs.query({ windowId: existingId });
-            if (tabs[0]) {
-              await chrome.tabs.update(tabs[0].id, { url: popupUrl });
-            }
-          }
-          return;
-        }
-      } catch {
-        // Window no longer exists; create a new one
-      }
-    }
-
-    // Create a new popup window on the right 25%
-    const notesWin = await chrome.windows.create({
-      url: popupUrl,
-      type: "popup",
-      left: notesLeft,
+    const notesRect = {
+      left: workArea.left + browserWidth,
       top: workArea.top,
       width: notesWidth,
-      height: notesHeight,
-      focused: true,
-    });
+      height: workArea.height,
+    };
 
-    // Store the window ID for reuse
-    await chrome.storage.session.set({ [NOTES_WINDOW_KEY]: notesWin.id });
+    // Apply 75% left bounds to the browser window
+    try {
+      await chrome.windows.update(browserWin.id, browserRect);
+    } catch (err) {
+      console.warn("[KeyNotes] Browser resize failed:", err);
+    }
 
-    // Check actual bounds and fix if the OS didn't honor our request
-    const actual = await chrome.windows.get(notesWin.id);
-    if (
-      actual.width < MIN_WIDTH ||
-      actual.height < MIN_HEIGHT
-    ) {
+    // Reuse existing notes window if open, otherwise create a new blank popup
+    const existingNotes = await findExistingNotesWindow(popupUrl);
+    if (existingNotes) {
+      if (existingNotes.state && existingNotes.state !== "normal") {
+        await normalizeWindow(existingNotes);
+      }
+      notesWin = await chrome.windows.update(existingNotes.id, {
+        ...notesRect,
+        focused: true,
+      });
+    } else {
+      notesWin = await chrome.windows.create({
+        url: popupUrl,
+        type: "popup",
+        ...notesRect,
+        focused: true,
+      });
+    }
+
+    if (notesWin?.id) {
+      await chrome.storage.session.set({ [NOTES_WINDOW_KEY]: notesWin.id });
+    }
+
+    // Check actual bounds afterward; if Chrome/OS could not fit the split,
+    // restore the original browser bounds and keep the notes window usable.
+    await sleep(120);
+    const actualBrowser = await chrome.windows.get(browserWin.id);
+    const actualNotes = await chrome.windows.get(notesWin.id);
+
+    const overlapX = actualBrowser.left + actualBrowser.width - actualNotes.left;
+    const browserMismatched =
+      Math.abs(actualBrowser.width - browserRect.width) > 32 ||
+      Math.abs(actualBrowser.left - browserRect.left) > 32;
+    const notesMismatched =
+      Math.abs(actualNotes.width - notesRect.width) > 32 ||
+      actualNotes.width < 280;
+    const outOfBounds =
+      actualNotes.left + actualNotes.width > workArea.left + workArea.width + 16;
+
+    if (overlapX > 12 || browserMismatched || notesMismatched || outOfBounds) {
+      await restoreBrowserWindow(browserWin.id, originalState, originalBounds);
+
+      const fallbackWidth = Math.min(
+        Math.max(MIN_USABLE_WIDTH, notesRect.width),
+        workArea.width,
+      );
+      const fallbackHeight = Math.min(
+        Math.max(MIN_USABLE_HEIGHT, Math.round(workArea.height * 0.78)),
+        workArea.height,
+      );
+
       await chrome.windows.update(notesWin.id, {
-        width: Math.max(actual.width, MIN_WIDTH),
-        height: Math.max(actual.height, MIN_HEIGHT),
+        left: workArea.left + Math.max(0, workArea.width - fallbackWidth),
+        top: workArea.top,
+        width: fallbackWidth,
+        height: fallbackHeight,
+        focused: true,
       });
     }
   } catch (err) {
     console.error("[KeyNotes background]", err);
+    // Guarantee the user still gets a usable notes window even if split logic fails
+    if (!notesWin) {
+      try {
+        const existing = await findExistingNotesWindow(popupUrl);
+        if (existing) {
+          await chrome.windows.update(existing.id, { focused: true });
+        } else {
+          const fallback = await chrome.windows.create({
+            url: popupUrl,
+            type: "popup",
+            width: 400,
+            height: 620,
+            focused: true,
+          });
+          if (fallback?.id) {
+            await chrome.storage.session.set({ [NOTES_WINDOW_KEY]: fallback.id });
+          }
+        }
+      } catch (fallbackErr) {
+        console.error("[KeyNotes fallback]", fallbackErr);
+      }
+    }
   }
 });
 
-// Clean up stored window ID when the notes window closes
 chrome.windows.onRemoved.addListener(async (windowId) => {
-  const stored = await chrome.storage.session.get(NOTES_WINDOW_KEY);
-  if (stored[NOTES_WINDOW_KEY] === windowId) {
-    await chrome.storage.session.remove(NOTES_WINDOW_KEY);
+  try {
+    const stored = await chrome.storage.session.get(NOTES_WINDOW_KEY);
+    if (stored[NOTES_WINDOW_KEY] === windowId) {
+      await chrome.storage.session.remove(NOTES_WINDOW_KEY);
+    }
+  } catch {
+    // ignore
   }
 });
