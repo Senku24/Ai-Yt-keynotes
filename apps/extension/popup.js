@@ -1,9 +1,9 @@
 /**
- * KeyNotes — Extension Panel Script
+ * KeyNotes — Extension Side Panel Script
  *
- * Normalizes YouTube watch/share/Shorts URLs to a videoId, caches successful
- * results in this document's memory only, handles drag-and-drop, and shows
- * accessible feedback. Closing or reloading resets the session.
+ * Normalizes YouTube watch/share/Shorts URLs to a videoId, pre-fills the
+ * active tab's YouTube URL in the input (without auto-submitting), caches
+ * successful results in this document's memory only, and supports drag-and-drop.
  */
 
 (() => {
@@ -30,6 +30,8 @@
 
   let loading = false;
   let dragDepth = 0;
+  let userEditedInput = false;
+  let activeResultVideoId = "";
 
   const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
 
@@ -52,6 +54,24 @@
       return videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : null;
     } catch {
       return null;
+    }
+  }
+
+  function applyPrefillUrl(url, { force = false } = {}) {
+    if (!url || loading) return;
+    const videoId = normalizeYoutubeVideoId(url);
+    if (!videoId) return;
+
+    if (force) {
+      if (videoId !== activeResultVideoId) {
+        urlInput.value = url;
+        userEditedInput = false;
+      }
+      return;
+    }
+
+    if (!userEditedInput && !urlInput.value.trim()) {
+      urlInput.value = url;
     }
   }
 
@@ -86,6 +106,7 @@
   }
 
   function showResults(videoId, keynotes) {
+    activeResultVideoId = videoId;
     notesList.innerHTML = "";
     keynotes.forEach((note) => {
       const li = document.createElement("li");
@@ -118,6 +139,10 @@
     return data;
   }
 
+  urlInput.addEventListener("input", () => {
+    userEditedInput = true;
+  });
+
   toastClose.addEventListener("click", hideError);
 
   form.addEventListener("submit", async (e) => {
@@ -139,8 +164,9 @@
     setLoading(true);
     try {
       const data = await fetchKeynotes(raw);
-      cache.set(data.videoId || videoId, data.keynotes);
-      showResults(data.videoId || videoId, data.keynotes);
+      const resolvedId = data.videoId || videoId;
+      cache.set(resolvedId, data.keynotes);
+      showResults(resolvedId, data.keynotes);
     } catch (err) {
       showError(err instanceof Error ? err.message : "Could not generate keynotes. Try again.");
     } finally {
@@ -194,7 +220,58 @@
       e.dataTransfer.getData("text/plain")?.trim();
     if (dropped) {
       urlInput.value = dropped;
+      userEditedInput = true;
       form.requestSubmit();
     }
   });
+
+  // ── Pre-fill current tab's YouTube URL without auto-submitting ──
+  if (typeof chrome !== "undefined") {
+    chrome.runtime?.onMessage?.addListener((message) => {
+      if (message?.type === "KEYNOTES_PREFILL_URL" && message.url) {
+        chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
+          const activeId = tabs?.[0]?.id;
+          if (typeof message.tabId !== "number" || typeof activeId !== "number" || activeId === message.tabId) {
+            applyPrefillUrl(message.url, { force: true });
+          }
+        });
+      }
+    });
+
+    chrome.storage?.onChanged?.addListener((changes, areaName) => {
+      if (areaName === "session" && changes.prefillUrl?.newValue) {
+        applyPrefillUrl(changes.prefillUrl.newValue);
+      }
+    });
+
+    (async () => {
+      let activeTab = null;
+      try {
+        [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      } catch {
+        // ignore tabs query errors
+      }
+
+      try {
+        const stored = await chrome.storage?.session?.get(["prefillUrl", "prefillTabId", "prefillAt"]);
+        const isFresh = stored?.prefillUrl && Date.now() - (stored.prefillAt || 0) < 15_000;
+        const matchesTab =
+          typeof stored?.prefillTabId !== "number" ||
+          typeof activeTab?.id !== "number" ||
+          stored.prefillTabId === activeTab.id;
+
+        if (isFresh && matchesTab) {
+          applyPrefillUrl(stored.prefillUrl);
+          await chrome.storage.session.remove(["prefillUrl", "prefillTabId", "prefillAt"]);
+          return;
+        }
+      } catch {
+        // ignore storage errors
+      }
+
+      if (activeTab?.url) {
+        applyPrefillUrl(activeTab.url);
+      }
+    })();
+  }
 })();

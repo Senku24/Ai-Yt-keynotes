@@ -1,0 +1,2 @@
+still same issue of window exiting the full screen, i dont want window exiting the fulll screen, i want within same window at full screen , split the yt tab to adjust the extention on right side within same tab as split view.
+also when extention loads up after clicking the icon make the current yt url as default, in the input place, dont submit or generate , just place it in input for user to decide.
