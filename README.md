@@ -8,9 +8,9 @@ Available as a web app and as a Chrome extension popup.
 
 | Web App | Chrome Extension |
 | --- | --- |
-| ![Web app](docs/screenshots/web-app.png) | ![Chrome extension](docs/screenshots/extension.png) |
+| !<img width="1035" height="621" alt="Screenshot 2026-11-26 at 6 05 41 AM" src="https://github.com/user-attachments/assets/30884754-c38b-48bc-afd8-4c32038ef442" />
+| <img width="1151" height="799" alt="Screenshot 2026-11-26 at 6 07 37 AM" src="https://github.com/user-attachments/assets/5493bf03-6d02-4ed9-87e7-ce7bfda2b998" /> |
 
-<!-- Add screenshots to docs/screenshots/ -->
 
 ## Features
 
@@ -93,6 +93,4 @@ Errors return `{ "error": { "code", "message" } }`.
 
 The extension calls `http://localhost:3001/keynotes` by default. To use a deployed backend, change `API_ENDPOINT` in [apps/extension/popup.js](apps/extension/popup.js) and update `host_permissions` in [apps/extension/manifest.json](apps/extension/manifest.json).
 
-## License
 
-Add a license before public release.
