@@ -1,26 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "KeyNotes — YouTube Takeaways",
+  "name": "GrumpNotes — Angry Grandpa YouTube Roasts",
   "version": "1.0.0",
-  "description": "Paste a YouTube link and get five transcript-grounded key takeaways.",
-  "permissions": ["activeTab", "storage", "sidePanel"],
+  "description": "An angry pixelated old man roasts your YouTube video choices from the transcript so you stop wasting time.",
+  "permissions": ["activeTab"],
   "host_permissions": [
     "http://localhost:3001/*",
     "http://127.0.0.1:3001/*"
   ],
-  "side_panel": {
-    "default_path": "popup.html"
-  },
   "action": {
-    "default_title": "Open KeyNotes",
+    "default_title": "Get Roasted by GrumpNotes",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
-  },
-  "background": {
-    "service_worker": "background.js"
   },
   "icons": {
     "16": "icons/icon16.png",

@@ -1,16 +1,23 @@
 /**
- * KeyNotes — Extension Side Panel Script
+ * GrumpNotes — Extension Side Panel Script
  *
  * Normalizes YouTube watch/share/Shorts URLs to a videoId, pre-fills the
  * active tab's YouTube URL in the input (without auto-submitting), caches
- * successful results in this document's memory only, and supports drag-and-drop.
+ * successful roasts in this document's memory only, and supports drag-and-drop.
  */
 
 (() => {
   const API_ENDPOINT = "http://localhost:3001/keynotes";
 
-  // View-scoped memory cache: videoId -> keynotes[]
+  // View-scoped memory cache: videoId -> roasts[]
   const cache = new Map();
+
+  const GRUMBLES = [
+    "PUTTING ON MY READING GLASSES…",
+    "JUDGING YOUR WATCH HISTORY…",
+    "READING THIS GARBAGE TRANSCRIPT…",
+    "SHAKING MY FIST AT THE CLOUD…",
+  ];
 
   const form = document.getElementById("url-form");
   const urlInput = document.getElementById("url-input");
@@ -21,6 +28,7 @@
   const toastMsg = document.getElementById("toast-msg");
   const toastClose = document.getElementById("toast-close");
   const skeleton = document.getElementById("skeleton");
+  const skelStatus = document.getElementById("skel-status");
   const results = document.getElementById("results");
   const notesList = document.getElementById("notes-list");
   const copyBtn = document.getElementById("copy-btn");
@@ -32,6 +40,7 @@
   let dragDepth = 0;
   let userEditedInput = false;
   let activeResultVideoId = "";
+  let grumbleTimer = null;
 
   const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
 
@@ -82,7 +91,19 @@
     btnText.hidden = on;
     btnSpinner.hidden = !on;
     skeleton.hidden = !on;
+
+    if (grumbleTimer) {
+      clearInterval(grumbleTimer);
+      grumbleTimer = null;
+    }
+
     if (on) {
+      let idx = 0;
+      skelStatus.textContent = GRUMBLES[0];
+      grumbleTimer = setInterval(() => {
+        idx = (idx + 1) % GRUMBLES.length;
+        skelStatus.textContent = GRUMBLES[idx];
+      }, 1600);
       results.hidden = true;
       empty.hidden = true;
       toast.hidden = true;
@@ -105,12 +126,12 @@
     }
   }
 
-  function showResults(videoId, keynotes) {
+  function showResults(videoId, roasts) {
     activeResultVideoId = videoId;
     notesList.innerHTML = "";
-    keynotes.forEach((note) => {
+    roasts.forEach((roast) => {
       const li = document.createElement("li");
-      li.textContent = note;
+      li.textContent = roast;
       notesList.appendChild(li);
     });
     sourceLink.href = `https://www.youtube.com/watch?v=${videoId}`;
@@ -119,7 +140,7 @@
     toast.hidden = true;
   }
 
-  async function fetchKeynotes(url) {
+  async function fetchRoasts(url) {
     const res = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -133,7 +154,7 @@
       if (err.code === "TRANSCRIPT_UNAVAILABLE") {
         throw new Error("Sorry, no transcript is available for this video.");
       }
-      throw new Error(err.message || "Could not generate keynotes. Try again.");
+      throw new Error(err.message || "Grandpa choked on his dentures. Try again.");
     }
 
     return data;
@@ -152,7 +173,7 @@
 
     const videoId = normalizeYoutubeVideoId(raw);
     if (!videoId) {
-      showError("Please paste a valid YouTube watch, share, or Shorts link.");
+      showError("That ain't a YouTube watch, share, or Shorts link, genius.");
       return;
     }
 
@@ -163,12 +184,12 @@
 
     setLoading(true);
     try {
-      const data = await fetchKeynotes(raw);
+      const data = await fetchRoasts(raw);
       const resolvedId = data.videoId || videoId;
       cache.set(resolvedId, data.keynotes);
       showResults(resolvedId, data.keynotes);
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Could not generate keynotes. Try again.");
+      showError(err instanceof Error ? err.message : "Grandpa choked on his dentures. Try again.");
     } finally {
       setLoading(false);
     }
@@ -177,15 +198,15 @@
   copyBtn.addEventListener("click", async () => {
     const items = notesList.querySelectorAll("li");
     const text = Array.from(items)
-      .map((li) => `• ${li.textContent}`)
+      .map((li, i) => `#${i + 1} ${li.textContent}`)
       .join("\n");
     try {
       await navigator.clipboard.writeText(text);
       copyBtn.classList.add("copied");
-      copyLabel.textContent = "Copied";
+      copyLabel.textContent = "COPIED!";
       setTimeout(() => {
         copyBtn.classList.remove("copied");
-        copyLabel.textContent = "Copy";
+        copyLabel.textContent = "COPY ROAST";
       }, 1800);
     } catch {
       // ignore clipboard errors
@@ -226,52 +247,16 @@
   });
 
   // ── Pre-fill current tab's YouTube URL without auto-submitting ──
-  if (typeof chrome !== "undefined") {
-    chrome.runtime?.onMessage?.addListener((message) => {
-      if (message?.type === "KEYNOTES_PREFILL_URL" && message.url) {
-        chrome.tabs?.query({ active: true, currentWindow: true }, (tabs) => {
-          const activeId = tabs?.[0]?.id;
-          if (typeof message.tabId !== "number" || typeof activeId !== "number" || activeId === message.tabId) {
-            applyPrefillUrl(message.url, { force: true });
-          }
-        });
-      }
-    });
-
-    chrome.storage?.onChanged?.addListener((changes, areaName) => {
-      if (areaName === "session" && changes.prefillUrl?.newValue) {
-        applyPrefillUrl(changes.prefillUrl.newValue);
-      }
-    });
-
-    (async () => {
-      let activeTab = null;
-      try {
-        [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      } catch {
-        // ignore tabs query errors
-      }
-
-      try {
-        const stored = await chrome.storage?.session?.get(["prefillUrl", "prefillTabId", "prefillAt"]);
-        const isFresh = stored?.prefillUrl && Date.now() - (stored.prefillAt || 0) < 15_000;
-        const matchesTab =
-          typeof stored?.prefillTabId !== "number" ||
-          typeof activeTab?.id !== "number" ||
-          stored.prefillTabId === activeTab.id;
-
-        if (isFresh && matchesTab) {
-          applyPrefillUrl(stored.prefillUrl);
-          await chrome.storage.session.remove(["prefillUrl", "prefillTabId", "prefillAt"]);
-          return;
+  if (typeof chrome !== "undefined" && chrome.tabs?.query) {
+    chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(([activeTab]) => {
+        if (activeTab?.url) {
+          applyPrefillUrl(activeTab.url);
         }
-      } catch {
-        // ignore storage errors
-      }
-
-      if (activeTab?.url) {
-        applyPrefillUrl(activeTab.url);
-      }
-    })();
+      })
+      .catch(() => {
+        // ignore tabs query errors
+      });
   }
 })();

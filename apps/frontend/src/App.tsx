@@ -1,8 +1,8 @@
 import axios from "axios";
-import { ArrowUpRight, Check, Clipboard, Loader2 } from "lucide-react";
-import { useCallback, useRef, useState, type FormEvent } from "react";
-import { Button } from "./components/ui/button.tsx";
+import { Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import "./index.css";
+import logo from "./logo.png";
 
 type ApiError = {
   error?: { code?: string; message?: string };
@@ -11,6 +11,13 @@ type ApiError = {
 const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 const endpoint = isLocal ? "http://localhost:3001/keynotes" : "/keynotes";
 const YOUTUBE_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
+
+const GRUMBLES = [
+  "PUTTING ON MY READING GLASSES…",
+  "JUDGING YOUR WATCH HISTORY…",
+  "READING THIS GARBAGE TRANSCRIPT…",
+  "SHAKING MY FIST AT THE CLOUD…",
+];
 
 function normalizeYoutubeVideoId(input: string): string | null {
   try {
@@ -34,23 +41,16 @@ function normalizeYoutubeVideoId(input: string): string | null {
   }
 }
 
-/* ── brand mark ─────────────────────────────────────────────── */
-function BrandMark() {
+/* ── GrumpNotes logo ───────────────────────────────────────── */
+function AngryOldManAvatar() {
   return (
-    <div
-      aria-hidden="true"
-      className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#f43f5e] via-[#ff5a36] to-[#ff8a3d] shadow-[0_6px_18px_rgba(255,77,77,0.28),inset_0_1px_0_rgba(255,255,255,0.28)]"
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M5.5 6.8C5.5 5.95 6.45 5.44 7.16 5.91L12.1 9.11C12.74 9.52 12.74 10.48 12.1 10.89L7.16 14.09C6.45 14.56 5.5 14.05 5.5 13.2V6.8Z"
-          fill="white"
-        />
-        <rect x="14.5" y="6.5" width="5" height="2.2" rx="1.1" fill="white" />
-        <rect x="14.5" y="10.9" width="3.8" height="2.2" rx="1.1" fill="white" fillOpacity="0.88" />
-        <rect x="14.5" y="15.3" width="4.6" height="2.2" rx="1.1" fill="white" fillOpacity="0.72" />
-      </svg>
-    </div>
+    <img
+      src={logo}
+      alt="GrumpNotes logo"
+      width={68}
+      height={68}
+      className="size-[68px] shrink-0 border-[3px] border-[#0c0814] bg-[#ef303e] object-contain p-1 shadow-[5px_5px_0_#0c0814]"
+    />
   );
 }
 
@@ -60,14 +60,14 @@ function Toast({ message, onDismiss }: { message: string; onDismiss: () => void 
     <div
       role="alert"
       aria-live="assertive"
-      className="animate-in slide-in-from-top-2 fade-in fixed left-1/2 top-6 z-50 w-[min(92vw,30rem)] -translate-x-1/2 rounded-xl border border-rose-400/35 bg-[#360f19]/92 px-4 py-3 text-sm font-medium text-rose-100 shadow-xl backdrop-blur-md"
+      className="fixed left-1/2 top-6 z-50 w-[min(92vw,36rem)] -translate-x-1/2 border-[3px] border-[#0c0814] bg-[#4e1120] px-5 py-3.5 text-base font-semibold text-[#ffd6dc] shadow-[5px_5px_0_#0c0814]"
     >
       <div className="flex items-center justify-between gap-3">
         <span>{message}</span>
         <button
           type="button"
           onClick={onDismiss}
-          className="rounded px-1.5 py-0.5 text-rose-200/70 transition-colors hover:text-white"
+          className="font-pixel-display bg-[#0c0814] px-2.5 py-1 text-xs text-[#ffe66d] hover:text-white"
           aria-label="Dismiss notification"
         >
           ✕
@@ -78,25 +78,41 @@ function Toast({ message, onDismiss }: { message: string; onDismiss: () => void 
 }
 
 /* ── skeleton loader ───────────────────────────────────────── */
-function SkeletonBullets() {
+function SkeletonRoast() {
+  const [grumbleIdx, setGrumbleIdx] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setGrumbleIdx((prev) => (prev + 1) % GRUMBLES.length);
+    }, 1600);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div
       role="status"
-      aria-label="Generating keynotes"
-      className="rounded-2xl border border-white/8 bg-[#14141d]/85 p-6 backdrop-blur-md"
+      aria-label="Generating roasts"
+      className="border-[3px] border-[#0c0814] bg-[#251d36] p-6 shadow-[6px_6px_0_#0c0814]"
     >
-      <p className="mb-4 text-xs font-medium tracking-wide text-[#ff8a3d]">
-        Distilling transcript…
+      <p className="font-pixel-display mb-3.5 text-sm text-[#ffe66d]">
+        {GRUMBLES[grumbleIdx]}
       </p>
+      <div className="mb-5 flex gap-2" aria-hidden="true">
+        {["#ff3b4e", "#ff8424", "#ffe66d", "#ff8424", "#ff3b4e"].map((color, idx) => (
+          <span
+            key={idx}
+            className="size-3 border-2 border-[#0c0814] animate-bounce"
+            style={{ backgroundColor: color, animationDelay: `${idx * 100}ms` }}
+          />
+        ))}
+      </div>
       <div className="space-y-3.5">
-        {[84, 68, 92, 60, 76].map((w, i) => (
-          <div key={i} className="flex items-center gap-3">
-            <div className="size-5 shrink-0 rounded-md bg-[#ff5a36]/15 animate-pulse" />
-            <div
-              className="h-3.5 rounded-md bg-white/8 animate-pulse"
-              style={{ width: `${w}%` }}
-            />
-          </div>
+        {[88, 72, 94, 65].map((w, i) => (
+          <div
+            key={i}
+            className="h-4 border-2 border-white/10 bg-[#2f2445]"
+            style={{ width: `${w}%` }}
+          />
         ))}
       </div>
     </div>
@@ -104,75 +120,66 @@ function SkeletonBullets() {
 }
 
 /* ── result card ───────────────────────────────────────────── */
-function KeynotesCard({ notes, videoId }: { notes: string[]; videoId: string }) {
+function RoastCard({ roasts, videoId }: { roasts: string[]; videoId: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
-    const text = notes.map((n) => `• ${n}`).join("\n");
+    const text = roasts.map((r, i) => `#${i + 1} ${r}`).join("\n");
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     });
-  }, [notes]);
+  }, [roasts]);
 
   return (
     <section
       aria-labelledby="notes-heading"
-      className="animate-in fade-in slide-in-from-bottom-2 overflow-hidden rounded-2xl border border-white/12 bg-[#161622]/90 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-md"
+      className="border-[3px] border-[#0c0814] bg-[#251d36] shadow-[6px_6px_0_#0c0814]"
     >
-      <div className="h-[2px] w-full bg-gradient-to-r from-[#f43f5e] via-[#ff5a36] to-[#ff8a3d]" />
-
-      <div className="p-6">
-        <div className="mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-gradient-to-br from-[#f43f5e] to-[#ff8a3d]" />
-            <h2
-              id="notes-heading"
-              className="text-xs font-semibold uppercase tracking-[0.12em] text-[#a1a1b5]"
-            >
-              Keynotes
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleCopy}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
-              copied
-                ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-300"
-                : "border-white/10 bg-white/[0.04] text-[#a1a1b5] hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-            }`}
-            aria-label="Copy keynotes"
-          >
-            {copied ? <Check className="size-3.5" /> : <Clipboard className="size-3.5" />}
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </button>
+      <div className="flex items-center justify-between gap-3 border-b-[3px] border-[#0c0814] bg-[#2f2445] px-6 py-4">
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden="true" className="text-lg">
+            💢
+          </span>
+          <h2 id="notes-heading" className="font-pixel-display text-sm font-bold text-[#ffe66d]">
+            GRANDPA SAYS:
+          </h2>
         </div>
 
-        <ol className="space-y-3.5">
-          {notes.map((note, index) => (
-            <li
-              key={`${index}-${note}`}
-              className="flex items-start gap-3 text-[15px] leading-relaxed text-[#f5f4f8]"
-            >
-              <span className="mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md bg-[#ff5a36]/15 text-xs font-bold tabular-nums text-[#ff8a3d]">
-                {index + 1}
-              </span>
-              <span>{note}</span>
-            </li>
-          ))}
-        </ol>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={`font-pixel-display border-2 border-[#0c0814] px-3 py-1.5 text-xs font-bold text-[#0c0814] shadow-[2px_2px_0_#0c0814] active:translate-x-[1px] active:translate-y-[1px] active:shadow-[1px_1px_0_#0c0814] ${
+            copied ? "bg-[#4ade80]" : "bg-[#ffe66d] hover:brightness-105"
+          }`}
+          aria-label="Copy roasts"
+        >
+          {copied ? "COPIED!" : "COPY ROAST"}
+        </button>
       </div>
 
-      <div className="border-t border-white/8 bg-black/20 px-6 py-3">
+      <ol className="space-y-4 p-6">
+        {roasts.map((roast, index) => (
+          <li
+            key={`${index}-${roast}`}
+            className="flex items-start gap-3.5 text-lg leading-relaxed text-[#fff7e8]"
+          >
+            <span className="font-pixel-display mt-0.5 inline-flex h-7 min-w-8 shrink-0 items-center justify-center border-2 border-[#0c0814] bg-[#ff3b4e] px-1.5 text-xs font-bold text-white shadow-[2px_2px_0_#0c0814]">
+              #{index + 1}
+            </span>
+            <span>{roast}</span>
+          </li>
+        ))}
+      </ol>
+
+      <div className="border-t-[3px] border-[#0c0814] bg-[#0c0814]/45 px-6 py-3.5">
         <a
           href={`https://www.youtube.com/watch?v=${videoId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-[#66667c] transition-colors hover:text-[#ff8a3d]"
+          className="font-pixel-display inline-flex items-center gap-1 text-xs text-[#8f82a8] transition-colors hover:text-[#ffe66d]"
         >
-          <span>Open on YouTube</span>
-          <ArrowUpRight className="size-3.5" />
+          WATCH ANYWAY (COWARD) ↗
         </a>
       </div>
     </section>
@@ -185,7 +192,7 @@ export default function App() {
   const cacheRef = useRef<Map<string, string[]>>(new Map());
   const dragDepthRef = useRef(0);
 
-  const [notes, setNotes] = useState<string[]>([]);
+  const [roasts, setRoasts] = useState<string[]>([]);
   const [videoId, setVideoId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -198,7 +205,7 @@ export default function App() {
 
     const normalizedId = normalizeYoutubeVideoId(rawUrl);
     if (!normalizedId) {
-      setError("Please paste a valid YouTube watch, share, or Shorts link.");
+      setError("That ain't a YouTube watch, share, or Shorts link, genius.");
       return;
     }
 
@@ -206,13 +213,13 @@ export default function App() {
     if (cached) {
       setError("");
       setVideoId(normalizedId);
-      setNotes(cached);
+      setRoasts(cached);
       return;
     }
 
     setLoading(true);
     setError("");
-    setNotes([]);
+    setRoasts([]);
     setVideoId("");
 
     try {
@@ -221,14 +228,14 @@ export default function App() {
       });
       const resolvedId = data.videoId || normalizedId;
       cacheRef.current.set(resolvedId, data.keynotes);
-      setNotes(data.keynotes);
+      setRoasts(data.keynotes);
       setVideoId(resolvedId);
     } catch (err) {
       const failure = axios.isAxiosError(err) ? (err.response?.data as ApiError)?.error : null;
       setError(
         failure?.code === "TRANSCRIPT_UNAVAILABLE"
           ? "Sorry, no transcript is available for this video."
-          : failure?.message ?? "Could not generate keynotes. Try again.",
+          : failure?.message ?? "Grandpa choked on his dentures. Try again.",
       );
     } finally {
       setLoading(false);
@@ -275,38 +282,40 @@ export default function App() {
       {error && <Toast message={error} onDismiss={() => setError("")} />}
 
       <main
-        className="mx-auto flex min-h-dvh max-w-xl flex-col px-5 py-16 sm:py-24"
+        className="mx-auto flex min-h-dvh max-w-2xl flex-col px-6 py-16 sm:py-24"
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
       >
         {/* header */}
-        <header className="mb-10">
-          <div className="mb-3 flex items-center gap-3">
-            <BrandMark />
-            <h1 className="text-2xl font-bold tracking-tight text-[#f5f4f8] sm:text-3xl">
-              Key
-              <span className="bg-gradient-to-r from-[#f43f5e] via-[#ff5a36] to-[#ff8a3d] bg-clip-text text-transparent">
-                Notes
-              </span>
-            </h1>
+        <header className="mb-9">
+          <div className="flex items-center gap-5">
+            <AngryOldManAvatar />
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="font-pixel-display text-3xl font-bold tracking-tight text-[#ffe66d] drop-shadow-[3px_3px_0_#0c0814] sm:text-4xl">
+                  GRUMP<span className="text-[#ff3b4e]">NOTES</span>
+                </h1>
+                <span className="font-pixel-display border-2 border-[#0c0814] bg-[#ff3b4e] px-2.5 py-1 text-xs font-bold text-white shadow-[2px_2px_0_#0c0814]">
+                  NO MERCY
+                </span>
+              </div>
+              <p className="mt-2 text-lg text-[#c9bedb]">
+                An angry old man roasts your terrible YouTube taste so you close the tab.
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-[#a1a1b5]">
-            Paste a YouTube link and distill the transcript into five crisp takeaways.
-          </p>
         </header>
 
         {/* form */}
-        <form onSubmit={handleSubmit} noValidate className="mb-7">
+        <form onSubmit={handleSubmit} noValidate className="mb-8">
           <label htmlFor="video-url" className="sr-only">
             YouTube URL
           </label>
           <div
-            className={`flex items-center gap-2 rounded-2xl border bg-[#14141d]/85 p-1.5 backdrop-blur-md transition-all ${
-              dragActive
-                ? "border-[#ff5a36]/65 ring-4 ring-[#ff5a36]/15"
-                : "border-white/10 focus-within:border-[#ff5a36]/55 focus-within:ring-4 focus-within:ring-[#ff5a36]/15"
+            className={`flex flex-col gap-2.5 border-[3px] bg-[#251d36] p-2.5 shadow-[6px_6px_0_#0c0814] sm:flex-row ${
+              dragActive ? "border-[#ffe66d]" : "border-[#0c0814] focus-within:border-[#ffe66d]"
             }`}
           >
             <input
@@ -315,34 +324,37 @@ export default function App() {
               name="url"
               type="text"
               inputMode="url"
-              placeholder="https://youtube.com/watch?v=… or youtu.be/…"
+              placeholder="Paste that garbage YT link…"
               autoComplete="off"
               spellCheck={false}
               readOnly={loading}
-              className="h-10 min-w-0 flex-1 bg-transparent px-3 text-sm text-[#f5f4f8] placeholder:text-[#66667c] focus:outline-none"
+              className="h-12 min-w-0 flex-1 border-2 border-white/12 bg-[#181224] px-4 text-lg text-[#fff7e8] placeholder:text-[#8f82a8] focus:border-[#ff8424] focus:outline-none"
             />
-            <Button
+            <button
               type="submit"
               disabled={loading}
-              className="h-10 shrink-0 rounded-xl bg-gradient-to-r from-[#f43f5e] via-[#ff5a36] to-[#ff8a3d] px-5 font-semibold text-white shadow-[0_4px_14px_rgba(255,77,77,0.28)] transition-all hover:brightness-110 active:scale-[0.98] disabled:opacity-45"
+              className="font-pixel-display inline-flex h-12 shrink-0 items-center justify-center border-[3px] border-[#0c0814] bg-gradient-to-b from-[#ff8424] to-[#ff3b4e] px-5 text-sm font-bold text-white shadow-[3px_3px_0_#0c0814] [text-shadow:1px_1px_0_#0c0814] hover:brightness-110 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#0c0814] disabled:opacity-55"
             >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : "Generate"}
-            </Button>
+              {loading ? <Loader2 className="size-5 animate-spin" /> : "ROAST ME!"}
+            </button>
           </div>
         </form>
 
         {/* results */}
-        {loading && <SkeletonBullets />}
-        {notes.length > 0 && <KeynotesCard notes={notes} videoId={videoId} />}
+        {loading && <SkeletonRoast />}
+        {roasts.length > 0 && <RoastCard roasts={roasts} videoId={videoId} />}
 
         {/* empty state */}
-        {!loading && notes.length === 0 && !error && (
-          <div className="mt-2 rounded-2xl border border-dashed border-white/10 bg-[#14141d]/40 px-6 py-10 text-center">
-            <p className="text-sm text-[#a1a1b5]">
-              Drop or paste a YouTube link above to get started.
+        {!loading && roasts.length === 0 && !error && (
+          <div className="border-[3px] border-dashed border-[#ffe66d]/35 bg-[#251d36] px-7 py-10 text-center shadow-[6px_6px_0_#0c0814]">
+            <p className="font-pixel-display text-sm text-[#ffe66d]">
+              BACK IN MY DAY WE READ BOOKS!
             </p>
-            <p className="mt-1.5 text-xs text-[#66667c]">
-              Supports watch, youtu.be, and Shorts URLs
+            <p className="mt-2.5 text-lg text-[#c9bedb]">
+              Drop or paste a YouTube link above so I can talk you out of watching it.
+            </p>
+            <p className="font-pixel-display mt-3.5 text-xs text-[#ff8424]">
+              SUPPORTS WATCH • YOUTU.BE • SHORTS
             </p>
           </div>
         )}

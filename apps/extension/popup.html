@@ -3,25 +3,29 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KeyNotes</title>
+  <title>GrumpNotes</title>
   <link rel="stylesheet" href="popup.css" />
 </head>
 <body>
-  <div class="ambient" aria-hidden="true"></div>
+  <div class="pixel-bg" aria-hidden="true"></div>
   <main id="app">
     <header>
       <div class="brand">
-        <div class="logo-badge" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M5.5 6.8C5.5 5.95 6.45 5.44 7.16 5.91L12.1 9.11C12.74 9.52 12.74 10.48 12.1 10.89L7.16 14.09C6.45 14.56 5.5 14.05 5.5 13.2V6.8Z" fill="white"/>
-            <rect x="14.5" y="6.5" width="5" height="2.2" rx="1.1" fill="white"/>
-            <rect x="14.5" y="10.9" width="3.8" height="2.2" rx="1.1" fill="white" fill-opacity="0.88"/>
-            <rect x="14.5" y="15.3" width="4.6" height="2.2" rx="1.1" fill="white" fill-opacity="0.72"/>
-          </svg>
+        <img
+          src="icons/icon128.png"
+          alt="GrumpNotes logo"
+          width="52"
+          height="52"
+          class="grandpa-avatar"
+        />
+        <div class="brand-copy">
+          <div class="title-row">
+            <h1>GRUMP<span>NOTES</span></h1>
+            <span class="rage-tag">NO MERCY</span>
+          </div>
+          <p class="tagline">An angry old man roasts your terrible YouTube taste.</p>
         </div>
-        <h1>Key<span>Notes</span></h1>
       </div>
-      <p class="tagline">Distill any YouTube video into five crisp takeaways.</p>
     </header>
 
     <form id="url-form" novalidate>
@@ -31,14 +35,14 @@
           id="url-input"
           type="text"
           inputmode="url"
-          placeholder="Paste YouTube watch, share, or Shorts link…"
+          placeholder="Paste that garbage YT link…"
           autocomplete="off"
           spellcheck="false"
         />
         <button type="submit" id="submit-btn">
-          <span class="btn-text">Generate</span>
+          <span class="btn-text">ROAST ME!</span>
           <span class="btn-spinner" hidden>
-            <svg class="spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            <svg class="spin" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
           </span>
         </button>
       </div>
@@ -49,38 +53,37 @@
       <button id="toast-close" type="button" aria-label="Dismiss message">✕</button>
     </div>
 
-    <div id="skeleton" class="skeleton-card" hidden role="status" aria-label="Generating keynotes">
-      <div class="skel-status">Distilling transcript…</div>
-      <div class="skel-line" style="width:86%"></div>
-      <div class="skel-line" style="width:72%"></div>
-      <div class="skel-line" style="width:92%"></div>
-      <div class="skel-line" style="width:64%"></div>
-      <div class="skel-line" style="width:78%"></div>
+    <div id="skeleton" class="skeleton-card" hidden role="status" aria-label="Generating roasts">
+      <div id="skel-status" class="skel-status">PUTTING ON MY READING GLASSES…</div>
+      <div class="pixel-loader" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <div class="skel-line" style="width:88%"></div>
+      <div class="skel-line" style="width:74%"></div>
+      <div class="skel-line" style="width:94%"></div>
+      <div class="skel-line" style="width:66%"></div>
     </div>
 
     <section id="results" hidden aria-labelledby="notes-heading">
-      <div class="results-bar"></div>
       <div class="results-header">
         <div class="results-title">
-          <span class="dot"></span>
-          <h2 id="notes-heading">Keynotes</h2>
+          <span class="anger-badge">💢</span>
+          <h2 id="notes-heading">GRANDPA SAYS:</h2>
         </div>
-        <button id="copy-btn" type="button" class="copy-btn" title="Copy keynotes" aria-label="Copy keynotes">
-          <svg id="copy-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-          </svg>
-          <span id="copy-label">Copy</span>
+        <button id="copy-btn" type="button" class="copy-btn" title="Copy roasts" aria-label="Copy roasts">
+          <span id="copy-label">COPY ROAST</span>
         </button>
       </div>
       <ol id="notes-list"></ol>
       <div class="results-footer">
-        <a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">Open on YouTube ↗</a>
+        <a id="source-link" class="source-link" target="_blank" rel="noopener noreferrer">WATCH ANYWAY (COWARD) ↗</a>
       </div>
     </section>
 
     <div id="empty" class="empty">
-      <p>Paste a link or drop one anywhere here.</p>
-      <span class="empty-hint">Supports watch, youtu.be &amp; Shorts</span>
+      <p class="empty-title">BACK IN MY DAY WE READ BOOKS!</p>
+      <p class="empty-sub">Paste or drop a YouTube link above so I can talk you out of watching it.</p>
+      <span class="empty-hint">SUPPORTS WATCH • YOUTU.BE • SHORTS</span>
     </div>
   </main>
 

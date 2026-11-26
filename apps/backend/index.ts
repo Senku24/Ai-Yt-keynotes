@@ -110,7 +110,7 @@ async (req, res) => {
         return sendError(res, 413, "INPUT_TOO_LARGE", "Try a shorter video.");
       }
       stage = "openai";
-      const keynotes = await withDeadline(client.signal, 12_000, (signal) =>
+      const keynotes = await withDeadline(client.signal, 20_000, (signal) =>
         generateKeynotes(transcript, signal),
       );
 
@@ -136,7 +136,7 @@ async (req, res) => {
         return sendError(res, 504, "REQUEST_TIMEOUT", "The request timed out. Try again.");
       }
 
-      sendError(res, 502, "UPSTREAM_ERROR", "Could not generate keynotes. Try again.");
+      sendError(res, 502, "UPSTREAM_ERROR", "Grandpa choked on his dentures. Try again.");
     } finally {
       res.off("close", handleClose);
       activeRequests--;
@@ -161,5 +161,5 @@ const handleRequestError: ErrorRequestHandler = (error, _req, res, next) => {
 app.use(handleRequestError);
 
 app.listen(port, () => {
-  console.log(`KeyNotes API listening on http://localhost:${port}`);
+  console.log(`GrumpNotes Roast API listening on http://localhost:${port}`);
 });

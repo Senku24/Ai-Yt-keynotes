@@ -1,21 +1,68 @@
 @import "../styles/globals.css";
 
+@font-face {
+  font-family: "Silkscreen";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/silkscreen-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Silkscreen";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/silkscreen-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./fonts/pixelify-sans-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./fonts/pixelify-sans-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Pixelify Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("./fonts/pixelify-sans-700.woff2") format("woff2");
+}
+
 :root {
   color-scheme: dark;
+  --font-display: "Silkscreen", monospace;
+  --font-body: "Pixelify Sans", monospace;
 }
 
 body {
   margin: 0;
-  background: #0b0b10;
-  color: #f5f4f8;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: #181224;
+  color: #fff7e8;
+  font-family: var(--font-body);
 }
 
-.gradii-background {
+.font-pixel-display {
+  font-family: var(--font-display);
+}
+
+.pixel-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  background-image:
+    radial-gradient(rgba(255, 230, 109, 0.08) 1px, transparent 1px),
+    radial-gradient(70% 50% at 15% 10%, rgba(255, 59, 78, 0.16) 0%, transparent 65%),
+    radial-gradient(60% 50% at 85% 20%, rgba(255, 132, 36, 0.12) 0%, transparent 65%);
+  background-size: 16px 16px, 100% 100%, 100% 100%;
 }
 
 #root {
