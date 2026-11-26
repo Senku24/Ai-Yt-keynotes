@@ -9,7 +9,7 @@ Available as a web app and as a Chrome extension popup.
 | Web App | Chrome Extension |
 | --- | --- |
 | <img width="1035" height="621" alt="Screenshot 2026-11-26 at 6 05 41 AM" src="https://github.com/user-attachments/assets/30884754-c38b-48bc-afd8-4c32038ef442" />
-|| <img width="1151" height="799" alt="Screenshot 2026-11-26 at 6 07 37 AM" src="https://github.com/user-attachments/assets/5493bf03-6d02-4ed9-87e7-ce7bfda2b998" /> 
+|<img width="1151" height="799" alt="Screenshot 2026-11-26 at 6 07 37 AM" src="https://github.com/user-attachments/assets/5493bf03-6d02-4ed9-87e7-ce7bfda2b998" /> 
 
 
 ## Features
